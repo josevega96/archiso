@@ -1,0 +1,44 @@
+From a9fabc67d2dc32fef2aa8588830aae94a575cafd Mon Sep 17 00:00:00 2001
+From: josevega96 <jdelavega36@gmail.com>
+Date: Wed, 3 Nov 2021 14:13:13 -0600
+Subject: [PATCH] Add secureboot support using preloader
+
+---
+ archiso/mkarchiso | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/archiso/mkarchiso b/archiso/mkarchiso
+index 6181af2..484be98 100755
+--- a/archiso/mkarchiso
++++ b/archiso/mkarchiso
+@@ -526,6 +526,9 @@ _make_bootmode_uefi-x64.systemd-boot.esp() {
+         "${pacstrap_dir}/usr/lib/systemd/boot/efi/systemd-bootx64.efi" \
+         "${pacstrap_dir}/usr/share/edk2-shell/x64/Shell_Full.efi" \
+         "${profile}/efiboot/" \
++	"${pacstrap_dir}/usr/share/preloader-signed/PreLoader.efi" \
++        "${pacstrap_dir}/usr/share/preloader-signed/HashTool.efi" \
++        "${pacstrap_dir}/usr/share/preloader-signed/os_altlinux.png" \
+         "${pacstrap_dir}/boot/vmlinuz-"* \
+         "${pacstrap_dir}/boot/initramfs-"*".img" \
+         "${_available_ucodes[@]}" \
+@@ -535,7 +538,16 @@ _make_bootmode_uefi-x64.systemd-boot.esp() {
+ 
+     # Copy systemd-boot EFI binary to the default/fallback boot path
+     mcopy -i "${work_dir}/efiboot.img" \
+-        "${pacstrap_dir}/usr/lib/systemd/boot/efi/systemd-bootx64.efi" ::/EFI/BOOT/BOOTx64.EFI
++        "${pacstrap_dir}/usr/share/preloader-signed/PreLoader.efi" ::/EFI/BOOT/BOOTx64.efi
++
++    mcopy -i "${work_dir}/efiboot.img" \
++        "${pacstrap_dir}/usr/share/preloader-signed/HashTool.efi" ::/EFI/BOOT/HashTool.efi
++
++    mcopy -i "${work_dir}/efiboot.img" \
++        "${pacstrap_dir}/usr/share/preloader-signed/os_altlinux.png" ::/EFI/BOOT/os_altlinux.png
++
++    mcopy -i "${work_dir}/efiboot.img" \
++        "${pacstrap_dir}/usr/lib/systemd/boot/efi/systemd-bootx64.efi" ::/EFI/BOOT/loader.efi
+ 
+     # Copy systemd-boot configuration files
+     mmd -i "${work_dir}/efiboot.img" ::/loader ::/loader/entries
+-- 
+2.33.1
+
