@@ -1,0 +1,470 @@
+
+## Arch Linux install script 
+
+efichk(){
+
+    if [[ -d /sys/firmware/efi/efivars ]];
+    then
+        efi=1
+        echo 'EFI mode detected'
+    else
+        efi=0
+        echo 'BIOS/LEGACY mode detected'
+    fi
+
+}
+
+wipe(){
+    
+    count=0
+
+    if [[ $efi = 1 ]];
+    then
+        echo 'creating efi partition'
+        echo -e "g\nn\n\n\n+0.500G\nt\n\n1\nw" | fdisk $disk 
+        echo "creating fat32 fs with name ${partit[$count]} in /dev/sda"
+	mkfs.vfat -F32 -I -n "${partit[$count]}" $disk'1'
+    else
+        echo "bios mode detected"
+    fi
+
+    while [[ -n ${partit[$count]} ]]
+    do
+        let count=count+1
+        let partnum=count+1
+        if [[ -n ${partit[$count]} ]];
+        then       
+            echo "Creating ${partit[$count]} partition"
+            if [[ ${partit[$count]} = SWAP  ]];
+            then
+                echo -e "n\n\n\n\nt\n\n19\nw" | fdisk $disk
+                echo "creating swap with name ${partit[$count]} in $disk$partnum"
+                mkswap $disk$partnum -L  ${partit[$count]}
+            else
+                echo -e "n\n\n\n+${parsize[$count]}G\nw" | fdisk $disk
+                echo "creating $fs fs with name ${partit[$count]} in $disk$partnum"
+                if [[ $fs = ext4 ]];
+                then
+                    mkfs.$fs $disk$partnum -F -L ${partit[$count]}
+                else
+                    mkfs.$fs $disk$partnum -f -L ${partit[$count]}
+                fi
+
+            fi
+        fi 
+    done
+   
+   menu 
+
+}
+
+partition(){
+
+    clear
+
+    echo -e '░█▀█░█▀█░█▀▄░▀█▀░▀█▀░▀█▀░▀█▀░█▀█░█▀█░░░█░█░█▀▀░█░░░█▀█░█▀▀░█▀▄ \n░█▀▀░█▀█░█▀▄░░█░░░█░░░█░░░█░░█░█░█░█░░░█▀█░█▀▀░█░░░█▀▀░█▀▀░█▀▄\n░▀░░░▀░▀░▀░▀░░▀░░▀▀▀░░▀░░▀▀▀░▀▀▀░▀░▀░░░▀░▀░▀▀▀░▀▀▀░▀░░░▀▀▀░▀░▀'
+    
+    echo ''
+
+    lsblk
+
+    read -p "please type the path of the disk that'll be used for instalation ex. /dev/sdx : " disk
+
+    disize=$(fdisk -l $disk  | grep $disk | cut -f3 -d " " | cut -f1 -d " " | cut -f1 -d $'\n' )
+
+    ram=$(free -th | grep Mem | cut -f1 -d G | cut -f2 -d : | sed "s/\ //g")
+
+    swap=$(echo "scale=2; $ram / 2" | bc -l )
+
+    rootsi=$(echo "scale=1; $disize - .500 - $swap" | bc -l)
+    
+    clear
+
+    echo -e '░█▀█░█▀█░█▀▄░▀█▀░▀█▀░▀█▀░▀█▀░█▀█░█▀█░░░█░█░█▀▀░█░░░█▀█░█▀▀░█▀▄ \n░█▀▀░█▀█░█▀▄░░█░░░█░░░█░░░█░░█░█░█░█░░░█▀█░█▀▀░█░░░█▀▀░█▀▀░█▀▄\n░▀░░░▀░▀░▀░▀░░▀░░▀▀▀░░▀░░▀▀▀░▀▀▀░▀░▀░░░▀░▀░▀▀▀░▀▀▀░▀░░░▀▀▀░▀░▀'
+
+    echo ''
+
+    echo -e " 1. ext4 \n 2. btrfs"
+
+    read -p "Select thee fs you would like to use: " resp
+
+    case $resp in 
+        1)
+            fs="ext4"
+            ;;
+        2)
+            fs="btrfs"
+            ;;
+        esac
+
+    clear
+
+    echo -e '░█▀█░█▀█░█▀▄░▀█▀░▀█▀░▀█▀░▀█▀░█▀█░█▀█░░░█░█░█▀▀░█░░░█▀█░█▀▀░█▀▄ \n░█▀▀░█▀█░█▀▄░░█░░░█░░░█░░░█░░█░█░█░█░░░█▀█░█▀▀░█░░░█▀▀░█▀▀░█▀▄\n░▀░░░▀░▀░▀░▀░░▀░░▀▀▀░░▀░░▀▀▀░▀▀▀░▀░▀░░░▀░▀░▀▀▀░▀▀▀░▀░░░▀▀▀░▀░▀'
+ 
+    echo ''
+
+    echo "volume $disk selected with a size of $disize Gb"
+
+    echo 'The recomended partition layout is' 
+    
+    echo " EFI = .500 GB "
+    echo " ROOT = $rootsi GB "
+    echo " SWAP = $swap GB"
+   
+    echo ''
+
+    echo -e "  1.Continue with the recomended layout (this will wipe $disk) \n  2.Partition disk manually (Only for advanced users, this will wipe $disk) \n  3.Specify partitions manually (recomended if youre dualbooting and you have an already partitioned disk) "
+
+    read -p "Please type the oprtion you would like to use: " resp
+
+    partit=( 'EFI'
+            'ROOT'
+            'SWAP'        
+        )
+
+
+    parsize=( ".500"
+                "$rootsi"
+                "$swap"
+            )
+
+    if [[ $fs = "ext4" ]];
+    then
+        parmount=( "/mnt/boot"
+                    "/mnt"
+                    "swap"
+                )
+    else
+        parmount=("/mnt/boot/efi"
+                "/mnt"
+                "/mnt/var/log"
+                "/mnt/home"
+                "/mnt/var/cache/pacman/pkg"
+                "/mnt/tmp"
+		"/mnt/var/lib/libvirt"
+		"/mnt/.snapshots"
+            )
+
+        subvol=("@"
+             "@log"
+             "@home"
+             "@pkg"
+             "@tmp"
+             "@libvirt"
+             "@snapshots")
+    fi
+
+    
+        
+
+case $resp in 
+        1)
+            wipe ${partit[@]}
+            ;;
+        2)
+            count=0
+            while [[ -n ${partit[$count]} ]]
+            do
+                partit[$count]=""
+                read -p "Please input the name of the partition (all caps): " partit[$count]
+		        if [[  ${partit[$count]} = "" ]];
+		        then
+			        echo ''
+                else
+                    read -p "Please input the size  of the partition ${partit[$count]} (in GB) : " parsize[$count]
+                        if [[ $fs = "ext4" ]];
+                        then
+                            read -p "Please input the mountpoint  of the partition ${partit[$count]} (beggining with /mnt): " parmount[$count]
+                        fi
+			        partit[$count+1]="test"
+		        fi
+		        let count=count+1
+            done
+
+            clear
+
+            echo -e '░█▀█░█▀█░█▀▄░▀█▀░▀█▀░▀█▀░▀█▀░█▀█░█▀█░░░█░█░█▀▀░█░░░█▀█░█▀▀░█▀▄ \n░█▀▀░█▀█░█▀▄░░█░░░█░░░█░░░█░░█░█░█░█░░░█▀█░█▀▀░█░░░█▀▀░█▀▀░█▀▄\n░▀░░░▀░▀░▀░▀░░▀░░▀▀▀░░▀░░▀▀▀░▀▀▀░▀░▀░░░▀░▀░▀▀▀░▀▀▀░▀░░░▀▀▀░▀░▀'
+
+            echo ''
+
+            count=0
+            echo 'the following partition scheme will be created'
+            while [[ -n ${partit[$count]} ]]
+            do
+                echo "${partit[$count]} = ${parsize[$count]} Gb"
+                let count=count+1
+            done
+
+            echo ''
+
+            read -p 'Would you like to continue with his changes? y/n: ' conf
+
+            if [[ $conf = y ]];
+            then
+                wipe
+            else
+                menu
+            fi
+    esac
+}
+
+install(){
+    
+    clear
+
+    echo -e "░▀█▀░█▀█░█▀▀░▀█▀░█▀█░█░░░█░░░█▀█░▀█▀░▀█▀░█▀█░█▀█\n░░█░░█░█░▀▀█░░█░░█▀█░█░░░█░░░█▀█░░█░░░█░░█░█░█░█\n"░▀▀▀░▀░▀░▀▀▀░░▀░░▀░▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀░▀░▀
+
+    echo -e " 1. linux\n 2. linux-lts\n 3. linux-zen\n 4. linux-hardened" 
+
+    read -p "Select the kernel you would like to install: " opc
+
+    case $opc in
+        1)
+            kern="linux"
+            ;;
+        2)
+            kern="linux-lts"
+            ;;
+        3)
+            kern="linux-zen"
+            ;;
+        4)
+            kern="linux-hardened"
+            ;;
+    esac
+
+    clear
+
+    echo -e "░▀█▀░█▀█░█▀▀░▀█▀░█▀█░█░░░█░░░█▀█░▀█▀░▀█▀░█▀█░█▀█\n░░█░░█░█░▀▀█░░█░░█▀█░█░░░█░░░█▀█░░█░░░█░░█░█░█░█\n░▀▀▀░▀░▀░▀▀▀░░▀░░▀░▀░▀▀▀░▀▀▀░▀░▀░░▀░░▀▀▀░▀▀▀░▀░▀"
+    if [[ $fs = "btrfs" ]];
+    then
+        echo "mounting ${partit[1]} to $disk'2'"
+        mount  $disk'2' ${parmount[1]}
+        count=0
+        while [[ -n ${subvol[$count]} ]]
+        do
+            if [[ -n ${subvol[$count]} ]];
+            then
+                echo "creating ${subvol[$count]} subvolume"
+                btrfs subvolume create /mnt/"${subvol[$count]}"
+                let count=count+1
+            fi
+        done
+        umount --recursive /mnt
+    fi
+
+
+
+    count=1
+
+    while [[ -n ${partit[$count]} ]]
+    do
+        let partnum=count+1 
+        if [[ ${partit[$count]} = "SWAP" ]];
+        then 
+            echo "Mounting SWAP partition"
+            swapon $disk$partnum
+        else
+            if [[ $fs = "ext4" ]];
+            then
+                echo "Mounting ${partit[$count]} into ${parmount[$count]}"
+                mkdir -p "${parmount[$count]}"
+                mount $disk$partnum "${parmount[$count]}"
+            else
+                while [[ -n ${subvol[$count2]} ]]
+		do
+                    echo "Mounting ${subvol[$count2]} into ${parmount[$count2 + 1]}"
+                    mkdir -p "${parmount[$count2 + 1]}"
+                    mount -o relatime,space_cache=v2,ssd,compress=lzo,subvol="${subvol[$count2]}" $disk'2' "${parmount[$count2 + 1]}"
+		    let count2=count2+1
+	        done
+            fi            
+        fi
+        let count=count+1
+    done
+    
+    echo "Mounting ${partit[0]} into ${parmount[0]}"
+    mkdir -p "${parmount[0]}"
+    mount $disk'1' "${parmount[0]}"
+
+    echo 'Installing all base packages'
+
+    echo 'Enabling parallel downloads'
+
+    sed -i "s/#ParallelDownloads/ParallelDownloads/g" /etc/pacman.conf
+
+    pacstrap /mnt base base-devel "$kern" networkmanager vim sudo linux-firmware
+
+    echo 'generating fstab'
+
+    genfstab -U /mnt > /mnt/etc/fstab
+
+    cp /usr/local/bin/restore /mnt/usr/local/bin
+
+    menu
+
+}
+
+
+config(){
+    clear
+    echo -e '░█▀▀░█▀█░█▀█░█▀▀░▀█▀░█▀▀░░░█░█░▀█▀░▀▀█\n░█░░░█░█░█░█░█▀▀░░█░░█░█░░░█▄█░░█░░▄▀░\n░▀▀▀░▀▀▀░▀░▀░▀░░░▀▀▀░▀▀▀░░░▀░▀░▀▀▀░▀▀▀'
+    
+    echo 'entering chroot enviorment'
+
+    echo 'fetching timezone'
+
+    arch-chroot /mnt /bin/bash -c "ln -sf /usr/share/zoneinfo/$(curl https://ipapi.co/timezone) /etc/localtime"
+
+    echo 'generating /etc/adjtime'
+
+    arch-chroot /mnt /bin/bash -c "hwclock --systohc" 
+
+    read -p 'Please type the locale you want to use leave blank for en_US.utf-8: ' locale
+
+    if [[ $locale = "" ]];
+    then 
+        locale="en_US.UTF-8"
+    fi
+    
+    echo $locale
+
+    sed -i "s/#$locale/$locale/g" /mnt/etc/locale.gen
+
+    arch-chroot /mnt /bin/bash -c "locale-gen"
+
+    read -p "Please type the keylayout you want to use: " keyl
+
+    echo "KEYMAP=$keyl" >> /mnt/etc/vconsole.conf
+
+    read -p "Please type the hostname: " hostn
+
+    echo $hostn >> /mnt/etc/hostname
+
+    read -p 'please type you username: ' usern
+
+    arch-chroot /mnt /bin/bash -c "useradd -m -G wheel $usern"
+
+    read -sp "please input password for $usern: "  pass
+
+    arch-chroot /mnt /bin/bash -c "(echo $pass ; echo $pass) | passwd $usern"
+
+    read -sp 'Please input the password for root: ' pass
+
+    sed -i "s/# %wheel ALL=(ALL) ALL/%wheel ALL=(ALL) ALL/g" /mnt/etc/sudoers
+
+    arch-chroot /mnt /bin/bash -c "(echo $pass ; echo $pass) | passwd"
+
+    echo 'setting up hosts' 
+
+    echo " 127.0.0.1	localhost
+::1		localhost
+127.0.1.1	$hostn.localdomain	$hostn" >> /mnt/etc/hosts
+
+    arch-chroot /mnt /bin/bash -c "systemctl enable NetworkManager.service"
+
+    menu
+}
+
+bootloader(){
+
+    clear
+
+    echo -e "░█▀▄░█▀█░█▀█░▀█▀░░░█░█░▀█▀░▀▀█\n░█▀▄░█░█░█░█░░█░░░░█▄█░░█░░▄▀░\n░▀▀░░▀▀▀░▀▀▀░░▀░░░░▀░▀░▀▀▀░▀▀▀"
+
+    echo ""
+
+	efid=$(echo "${parmount[0]}" | sed "s|/mnt||g")
+
+    echo -e " 1. Grub \n 2. refind "
+
+    read -p "select the bootloader you want to install: " resp
+
+    case $resp in
+
+        1)
+            arch-chroot /mnt /bin/bash -c "pacman -S --noconfirm  grub efibootmgr os-prober"
+
+            arch-chroot /mnt /bin/bash -c "grub-install --target=x86_64-efi --efi-directory=$efid"
+
+            arch-chroot /mnt /bin/bash -c "grub-mkconfig -o /boot/grub/grub.cfg"
+            ;;
+        2)
+            arch-chroot /mnt /bin/bash -c "pacman -S --noconfirm refind"
+
+            arch-chroot /mnt /bin/bash -c "refind-install"
+
+            vol=$(blkid | grep $disk'2' | cut -f2 -d '"')
+
+            sed -i "s/volume   \"Arch Linux\"/volume   $vol/g" "/mnt/$efid/EFI/refind/refind.conf"
+
+
+	        if [[ -f "${parmount[0]}/vmlinuz-$kern" ]];
+	        then
+                vol=$(blkid | grep $disk'1' | cut -f2 -d '"')
+                sed -i "s|initrd   /boot/|initrd   /|g" "/mnt/$efid/EFI/refind/refind.conf"
+                sed -i "s|loader   /boot/|loader   /|g" "/mnt/$efid/EFI/refind/refind.conf"
+	        fi
+
+            sed -i "s/vmlinuz-linux/vmlinuz-$kern/g" "/mnt/$efid/EFI/refind/refind.conf"
+
+            sed -i "s/initramfs-linux/initramfs-$kern/g" "/mnt/$efid/EFI/refind/refind.conf"
+
+            sed -i "643d" "/mnt/$efid/EFI/refind/refind.conf"
+
+            if [[ $fs = "ext4" ]];
+            then
+            	uuid=$(blkid | grep $disk'2' | cut -f10 -d '"')
+                sed -i "s|5028fa50-0079-4c40-b240-abfaf28693ea|$uuid |g" "/mnt/$efid/EFI/refind/refind.conf"
+            else
+            	uuid=$(blkid | grep $disk'2' | cut -f12 -d '"')
+                sed -i "s|initrd   /|initrd   /@/|g" "/mnt/$efid/EFI/refind/refind.conf"
+                sed -i "s|loader   /|loader   /@/|g" "/mnt/$efid/EFI/refind/refind.conf"
+                sed -i "s|5028fa50-0079-4c40-b240-abfaf28693ea|$uuid  rootflags=subvol=@ |g" "/mnt/$efid/EFI/refind/refind.conf"
+            fi
+
+   
+    esac
+
+    menu
+
+    
+
+
+}
+
+menu(){
+
+    clear
+    echo -e '░▀▀█░█▀█░█▀▀░█▀▀░█░█░█▀▀░█▀▀░█▀█░░░█▀█░█▀▄░█▀▀░█░█░▀█▀░█▀█ \n░░░█░█░█░▀▀█░█▀▀░▀▄▀░█▀▀░█░█░█▀█░░░█▀█░█▀▄░█░░░█▀█░░█░░█░█\n░▀▀░░▀▀▀░▀▀▀░▀▀▀░░▀░░▀▀▀░▀▀▀░▀░▀░░░▀░▀░▀░▀░▀▀▀░▀░▀░▀▀▀░▀░▀'
+    efichk
+    echo -e " 1. Reflector config \n 2. Partitioning \n 3. Mount partitions and begin installation \n 4. Configuration \n 5. bootloader install\n 6. Exit and reboot "
+    read -p "Select the option you want to use: " sel
+    
+    case $sel in 
+
+        1)
+            echo 'setting up reflector'
+            reflector  --latest 5 --sort rate --save /etc/pacman.d/mirrorlist 
+            menu
+            ;;
+        2)
+            partition
+            ;;
+        3)
+    	    install
+	        ;;
+        4)
+            config
+            ;;
+    	5)
+	        bootloader
+	         ;;
+    	6)
+    	    umount -a
+	        reboot
+	         ;;
+    esac 
+
+}
+menu
