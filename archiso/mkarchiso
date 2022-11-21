@@ -781,7 +781,7 @@ _make_bootmode_uefi-x64.systemd-boot.esp() {
         "${pacstrap_dir}/usr/share/preloader-signed/os_altlinux.png" ::/EFI/BOOT/os_altlinux.png
     
     mcopy -i "${efibootimg}" \
-        "${pacstrap_dir}/usr/lib/systemd/boot/efi/systemd-bootx64.efi" ::/EFI/BOOT/BOOTx64.EFI
+        "${pacstrap_dir}/usr/lib/systemd/boot/efi/systemd-bootx64.efi" ::/EFI/BOOT/loader.efi
 
     # Copy systemd-boot configuration files
     mmd -i "${efibootimg}" ::/loader ::/loader/entries
